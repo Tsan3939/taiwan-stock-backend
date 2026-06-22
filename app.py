@@ -266,6 +266,101 @@ def _rows_from_stock_day_all(payload: dict[str, Any], limit: int) -> dict[str, A
     return {"trade_date": trade_date, "results": results[:limit]}
 
 
+def _fetch_yfinance_rankings(max_stocks: int = 500) -> list[dict[str, Any]]:
+    """批次下載台股當日行情，供量大排行 / 漲停篩選。"""
+    import yfinance as yf
+
+    from data_sources.stock_list import get_stock_list
+
+    stocks = get_stock_list()[:max_stocks]
+    if not stocks:
+        return []
+
+    symbols = [
+        s.get("symbol") or f"{s['code']}.TW"
+        for s in stocks
+    ]
+
+    data = yf.download(
+        symbols,
+        period="2d",
+        interval="1d",
+        group_by="ticker",
+        auto_adjust=True,
+        progress=False,
+        threads=True,
+    )
+
+    if data is None or data.empty:
+        return []
+
+    multi_index = hasattr(data.columns, "nlevels") and data.columns.nlevels > 1
+    results: list[dict[str, Any]] = []
+
+    for stock in stocks:
+        sym = stock.get("symbol") or f"{stock['code']}.TW"
+        try:
+            if multi_index:
+                if sym not in data.columns.get_level_values(0):
+                    continue
+                ticker_data = data[sym].dropna(how="all")
+            else:
+                if len(symbols) == 1 and symbols[0] == sym:
+                    ticker_data = data.dropna(how="all")
+                else:
+                    continue
+
+            if ticker_data.empty:
+                continue
+
+            row = ticker_data.iloc[-1]
+            volume = int(row.get("Volume", 0) or 0)
+            close = float(row.get("Close", 0) or 0)
+            if volume == 0 or close == 0:
+                continue
+
+            prev_rows = ticker_data.iloc[:-1]
+            prev_close = (
+                float(prev_rows.iloc[-1]["Close"])
+                if not prev_rows.empty
+                else close
+            )
+            change = round(close - prev_close, 2)
+            change_pct = (
+                round(change / prev_close * 100, 2) if prev_close > 0 else 0.0
+            )
+            results.append({
+                "symbol": sym,
+                "code": stock["code"],
+                "name": stock["name"],
+                "close": close,
+                "change": change,
+                "change_pct": change_pct,
+                "volume": volume,
+            })
+        except Exception:
+            continue
+
+    return results
+
+
+def _fetch_top_volume_via_yfinance() -> dict[str, Any]:
+    app.logger.info("Falling back to yfinance for top_volume")
+    results = _fetch_yfinance_rankings(max_stocks=500)
+    results.sort(key=lambda x: x["volume"], reverse=True)
+    trade_date = datetime.now().strftime("%Y-%m-%d")
+    return {"trade_date": trade_date, "results": results[:30]}
+
+
+def _fetch_limit_up_via_yfinance() -> dict[str, Any]:
+    app.logger.info("Falling back to yfinance for limit_up")
+    results = _fetch_yfinance_rankings(max_stocks=500)
+    limit_up = [r for r in results if r["change_pct"] >= 9.5]
+    limit_up.sort(key=lambda x: (-x["change_pct"], x["code"]))
+    trade_date = datetime.now().strftime("%Y-%m-%d")
+    return {"trade_date": trade_date, "results": limit_up}
+
+
 def _fetch_top_volume_payload() -> dict[str, Any]:
     # 方案一：MI_INDEX20（requests）
     status, text = _http_get_text(_TWSE_MS_URL)
@@ -327,7 +422,8 @@ def _fetch_top_volume_payload() -> dict[str, Any]:
         if result4["results"]:
             return result4
 
-    raise RuntimeError("All TWSE data sources failed")
+    # 最終備援：yfinance（Render 海外 IP 無法存取 TWSE）
+    return _fetch_top_volume_via_yfinance()
 
 
 def _fetch_limit_up_payload() -> dict[str, Any]:
@@ -395,7 +491,8 @@ def _fetch_limit_up_payload() -> dict[str, Any]:
         if limit_up:
             return {"trade_date": all_rows["trade_date"], "results": limit_up}
 
-    return {"trade_date": "", "results": []}
+    # 最終備援：yfinance
+    return _fetch_limit_up_via_yfinance()
 
 
 def _compute_chart_blocking(symbol: str, start_date: str, end_date: str) -> list[dict]:
@@ -445,7 +542,7 @@ def route_top_volume():
     print(f"recursion limit: {sys.getrecursionlimit()}", flush=True)
     try:
         future = _http_executor.submit(_fetch_top_volume_payload)
-        payload = future.result(timeout=60)
+        payload = future.result(timeout=150)
         return _json_response(payload)
     except RecursionError:
         app.logger.exception("route_top_volume RecursionError")
@@ -470,7 +567,7 @@ def route_limit_up():
     print("=== route_limit_up called ===", flush=True)
     try:
         future = _http_executor.submit(_fetch_limit_up_payload)
-        payload = future.result(timeout=60)
+        payload = future.result(timeout=150)
         return _json_response(payload)
     except RecursionError:
         app.logger.exception("route_limit_up RecursionError")
