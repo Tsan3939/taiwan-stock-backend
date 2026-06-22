@@ -18,6 +18,10 @@ from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 from flask_sock import Sock
 
+from data_sources.yahoo_tw_rankings import (
+    fetch_limit_up as _fetch_limit_up_yahoo_tw,
+    fetch_top_volume as _fetch_top_volume_yahoo_tw,
+)
 from data_sources.yfinance_rankings import (
     build_limit_up as _build_limit_up_yfinance,
     build_top_volume as _build_top_volume_yfinance,
@@ -375,8 +379,34 @@ def _try_twse_stock_day_all(limit: int) -> dict[str, Any] | None:
     return result if result["results"] else None
 
 
+def _try_yahoo_tw_top() -> dict[str, Any] | None:
+    try:
+        payload = _fetch_top_volume_yahoo_tw(RANKING_DISPLAY_LIMIT)
+        if payload.get("results"):
+            app.logger.info("top_volume 使用 Yahoo 奇摩股市排行")
+            return payload
+    except Exception:
+        app.logger.exception("Yahoo TW top_volume 失敗")
+    return None
+
+
+def _try_yahoo_tw_limit_up() -> dict[str, Any] | None:
+    try:
+        payload = _fetch_limit_up_yahoo_tw(RANKING_DISPLAY_LIMIT)
+        if payload.get("results"):
+            app.logger.info("limit_up 使用 Yahoo 奇摩股市漲幅排行")
+            return payload
+    except Exception:
+        app.logger.exception("Yahoo TW limit_up 失敗")
+    return None
+
+
 def _fetch_top_volume_payload() -> dict[str, Any]:
     result = _try_twse_mi_index20(_TWSE_MS_URL, "MI_INDEX20", RANKING_DISPLAY_LIMIT)
+    if result:
+        return result
+
+    result = _try_yahoo_tw_top()
     if result:
         return result
 
@@ -390,6 +420,10 @@ def _fetch_top_volume_payload() -> dict[str, Any]:
 
 def _fetch_limit_up_payload() -> dict[str, Any]:
     result = _try_twse_mi_index20(_TWSE_UP_URL, "MI_INDEX20 UP", RANKING_DISPLAY_LIMIT)
+    if result:
+        return result
+
+    result = _try_yahoo_tw_limit_up()
     if result:
         return result
 
