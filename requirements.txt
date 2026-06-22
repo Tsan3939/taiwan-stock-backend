@@ -1,0 +1,9 @@
+flask
+flask-sock
+flask-cors
+requests
+pandas
+yfinance
+python-dateutil
+beautifulsoup4
+apscheduler
