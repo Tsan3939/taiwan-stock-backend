@@ -117,9 +117,9 @@ def _fetch_index20(url: str, limit: int | None = None) -> dict[str, Any]:
     return {"trade_date": trade_date, "results": results}
 
 
-def fetch_top_volume(limit: int = 30) -> dict[str, Any]:
+def fetch_top_volume(limit: int = 10) -> dict[str, Any]:
     return _fetch_index20(_TOP_VOLUME_URL, limit=limit)
 
 
-def fetch_limit_up() -> dict[str, Any]:
-    return _fetch_index20(_LIMIT_UP_URL, limit=None)
+def fetch_limit_up(limit: int = 10) -> dict[str, Any]:
+    return _fetch_index20(_LIMIT_UP_URL, limit=limit)

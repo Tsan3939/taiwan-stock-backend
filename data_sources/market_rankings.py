@@ -11,6 +11,7 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 REQUEST_TIMEOUT = 20
+RANKING_DISPLAY_LIMIT = 10
 TWSE_DAY_ALL = "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL"
 TPEX_DAILY_OPENAPI = (
     "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes"
@@ -330,7 +331,7 @@ def _load_latest_stocks() -> tuple[list[dict[str, Any]], str]:
     return [], ""
 
 
-def get_top_volume(limit: int = 25) -> dict[str, Any]:
+def get_top_volume(limit: int = RANKING_DISPLAY_LIMIT) -> dict[str, Any]:
     rows, trade_date = _load_latest_stocks()
     filtered = [r for r in rows if not _is_etf(r["code"]) and r["volume"] > 0]
     filtered.sort(key=lambda r: r["volume"], reverse=True)
@@ -370,6 +371,6 @@ def get_limit_up() -> dict[str, Any]:
             "change": r["change"],
             "change_pct": r["change_pct"],
         }
-        for r in filtered
+        for r in filtered[:RANKING_DISPLAY_LIMIT]
     ]
     return {"trade_date": trade_date, "results": results}

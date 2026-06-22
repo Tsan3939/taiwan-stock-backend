@@ -17,6 +17,8 @@ from flask import Blueprint, jsonify
 rankings_bp = Blueprint("rankings", __name__)
 logger = logging.getLogger(__name__)
 
+RANKING_DISPLAY_LIMIT = 10
+
 _TWSE_HEADERS = {"User-Agent": "Mozilla/5.0"}
 _TWSE_MS_URL = (
     "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX20"
@@ -129,7 +131,7 @@ def _error_response(message: str, status: int = 500):
 @rankings_bp.route("/api/stocks/top-volume", methods=["GET"])
 def route_top_volume():
     try:
-        payload = _load_mi_index20(_TWSE_MS_URL, limit=30)
+        payload = _load_mi_index20(_TWSE_MS_URL, limit=RANKING_DISPLAY_LIMIT)
         return jsonify(payload)
     except RecursionError:
         logger.exception("route_top_volume recursion")
@@ -143,7 +145,7 @@ def route_top_volume():
 @rankings_bp.route("/api/stocks/limit-up", methods=["GET"])
 def route_limit_up():
     try:
-        payload = _load_mi_index20(_TWSE_UP_URL, limit=None)
+        payload = _load_mi_index20(_TWSE_UP_URL, limit=RANKING_DISPLAY_LIMIT)
         return jsonify(payload)
     except RecursionError:
         logger.exception("route_limit_up recursion")

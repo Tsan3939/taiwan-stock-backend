@@ -33,6 +33,9 @@ sock = Sock(app)
 
 USE_MOCK = os.environ.get("USE_MOCK_DATA", "false").lower() == "true"
 
+# 量大排行 / 漲停股 API 回傳筆數上限
+RANKING_DISPLAY_LIMIT = 10
+
 _TWSE_MS_URL = (
     "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX20"
     "?response=json&type=MS"
@@ -381,7 +384,7 @@ def _fetch_top_volume_via_yfinance() -> dict[str, Any]:
     results = _fetch_yfinance_rankings(max_stocks=500)
     results.sort(key=lambda x: x["volume"], reverse=True)
     trade_date = datetime.now().strftime("%Y-%m-%d")
-    return {"trade_date": trade_date, "results": results[:30]}
+    return {"trade_date": trade_date, "results": results[:RANKING_DISPLAY_LIMIT]}
 
 
 def _fetch_limit_up_via_yfinance() -> dict[str, Any]:
@@ -390,7 +393,7 @@ def _fetch_limit_up_via_yfinance() -> dict[str, Any]:
     limit_up = [r for r in results if r["change_pct"] >= 9.5]
     limit_up.sort(key=lambda x: (-x["change_pct"], x["code"]))
     trade_date = datetime.now().strftime("%Y-%m-%d")
-    return {"trade_date": trade_date, "results": limit_up}
+    return {"trade_date": trade_date, "results": limit_up[:RANKING_DISPLAY_LIMIT]}
 
 
 def _fetch_top_volume_payload() -> dict[str, Any]:
@@ -400,7 +403,7 @@ def _fetch_top_volume_payload() -> dict[str, Any]:
     if status == 200 and text.strip():
         payload = _safe_json_loads(text, "MI_INDEX20")
         if payload and payload.get("stat") == "OK" and payload.get("data"):
-            result = _rows_from_mi_index20(payload, 30)
+            result = _rows_from_mi_index20(payload, RANKING_DISPLAY_LIMIT)
             if result["results"]:
                 return result
 
@@ -410,7 +413,7 @@ def _fetch_top_volume_payload() -> dict[str, Any]:
     if text2.strip():
         payload2 = _safe_json_loads(text2, "curl MI_INDEX20")
         if payload2 and payload2.get("data"):
-            result2 = _rows_from_mi_index20(payload2, 30)
+            result2 = _rows_from_mi_index20(payload2, RANKING_DISPLAY_LIMIT)
             if result2["results"]:
                 return result2
 
@@ -431,7 +434,7 @@ def _fetch_top_volume_payload() -> dict[str, Any]:
         payload3 = _safe_json_loads(text3, f"STOCK_DAY_ALL:{date_yyyymmdd}")
         if not payload3:
             continue
-        result3 = _rows_from_stock_day_all(payload3, 30)
+        result3 = _rows_from_stock_day_all(payload3, RANKING_DISPLAY_LIMIT)
         if result3["results"]:
             return result3
 
@@ -450,7 +453,7 @@ def _fetch_top_volume_payload() -> dict[str, Any]:
         payload4 = _safe_json_loads(text4, f"curl STOCK_DAY_ALL:{date_yyyymmdd}")
         if not payload4:
             continue
-        result4 = _rows_from_stock_day_all(payload4, 30)
+        result4 = _rows_from_stock_day_all(payload4, RANKING_DISPLAY_LIMIT)
         if result4["results"]:
             return result4
 
@@ -465,7 +468,7 @@ def _fetch_limit_up_payload() -> dict[str, Any]:
     if status == 200 and text.strip():
         payload = _safe_json_loads(text, "MI_INDEX20 UP")
         if payload and payload.get("stat") == "OK" and payload.get("data"):
-            result = _rows_from_mi_index20(payload, 999)
+            result = _rows_from_mi_index20(payload, RANKING_DISPLAY_LIMIT)
             if result["results"]:
                 return result
 
@@ -475,7 +478,7 @@ def _fetch_limit_up_payload() -> dict[str, Any]:
     if text2.strip():
         payload2 = _safe_json_loads(text2, "curl MI_INDEX20 UP")
         if payload2 and payload2.get("data"):
-            result2 = _rows_from_mi_index20(payload2, 999)
+            result2 = _rows_from_mi_index20(payload2, RANKING_DISPLAY_LIMIT)
             if result2["results"]:
                 return result2
 
@@ -500,7 +503,10 @@ def _fetch_limit_up_payload() -> dict[str, Any]:
         limit_up = [r for r in all_rows["results"] if r["change_pct"] >= 9.5]
         limit_up.sort(key=lambda x: (-x["change_pct"], x["code"]))
         if limit_up:
-            return {"trade_date": all_rows["trade_date"], "results": limit_up}
+            return {
+                "trade_date": all_rows["trade_date"],
+                "results": limit_up[:RANKING_DISPLAY_LIMIT],
+            }
 
     # 方案四：STOCK_DAY_ALL（curl 備援）
     for date_yyyymmdd in _recent_weekday_dates(5):
@@ -521,7 +527,10 @@ def _fetch_limit_up_payload() -> dict[str, Any]:
         limit_up = [r for r in all_rows["results"] if r["change_pct"] >= 9.5]
         limit_up.sort(key=lambda x: (-x["change_pct"], x["code"]))
         if limit_up:
-            return {"trade_date": all_rows["trade_date"], "results": limit_up}
+            return {
+                "trade_date": all_rows["trade_date"],
+                "results": limit_up[:RANKING_DISPLAY_LIMIT],
+            }
 
     # 最終備援：yfinance
     return _fetch_limit_up_via_yfinance()
