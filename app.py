@@ -262,95 +262,129 @@ def _rows_from_stock_day_all(payload: dict[str, Any], limit: int) -> dict[str, A
 
 
 def _fetch_top_volume_payload() -> dict[str, Any]:
-    # 方案一：MI_INDEX20 成交量前 20
+    # 方案一：MI_INDEX20（requests）
     status, text = _http_get_text(_TWSE_MS_URL)
-    app.logger.info(
-        "TWSE MI_INDEX20 status=%s body_len=%s body=%s",
-        status,
-        len(text),
-        text[:200],
-    )
-    print(
-        f"TWSE MI_INDEX20 status: {status}, body length: {len(text)}, body: {text[:200]}",
-        flush=True,
-    )
-
-    if status == 200:
+    app.logger.info("MI_INDEX20 status=%s body=%s", status, text[:300])
+    if status == 200 and text.strip():
         payload = _safe_json_loads(text, "MI_INDEX20")
         if payload and payload.get("stat") == "OK" and payload.get("data"):
             result = _rows_from_mi_index20(payload, 30)
             if result["results"]:
                 return result
 
-    # 方案二：STOCK_DAY_ALL 依成交量排序
+    # 方案二：MI_INDEX20（curl，繞過 requests/gevent 問題）
+    status2, text2 = _http_get_text_via_curl(_TWSE_MS_URL)
+    app.logger.info("curl MI_INDEX20 status=%s body=%s", status2, text2[:300])
+    if text2.strip():
+        payload2 = _safe_json_loads(text2, "curl MI_INDEX20")
+        if payload2 and payload2.get("data"):
+            result2 = _rows_from_mi_index20(payload2, 30)
+            if result2["results"]:
+                return result2
+
+    # 方案三：STOCK_DAY_ALL 依最近交易日依成交量排序
     for date_yyyymmdd in _recent_weekday_dates(10):
-        status2, text2 = _http_get_text(
+        status3, text3 = _http_get_text(
             _TWSE_DAY_ALL_URL,
             params={"response": "json", "date": date_yyyymmdd},
         )
         app.logger.info(
-            "STOCK_DAY_ALL date=%s status=%s body_len=%s body=%s",
+            "STOCK_DAY_ALL date=%s status=%s body=%s",
             date_yyyymmdd,
-            status2,
-            len(text2),
-            text2[:200],
+            status3,
+            text3[:200],
         )
-        print(
-            f"STOCK_DAY_ALL date={date_yyyymmdd} status: {status2}, body: {text2[:200]}",
-            flush=True,
-        )
-        if status2 != 200 or not text2.strip():
+        if status3 != 200 or not text3.strip():
             continue
-        payload2 = _safe_json_loads(text2, f"STOCK_DAY_ALL:{date_yyyymmdd}")
-        if not payload2:
+        payload3 = _safe_json_loads(text3, f"STOCK_DAY_ALL:{date_yyyymmdd}")
+        if not payload3:
             continue
-        result2 = _rows_from_stock_day_all(payload2, 30)
-        if result2["results"]:
-            return result2
-
-    # curl 最後備援
-    status3, text3 = _http_get_text_via_curl(_TWSE_MS_URL)
-    app.logger.info("curl MI_INDEX20 status=%s body=%s", status3, text3[:200])
-    payload3 = _safe_json_loads(text3, "curl MI_INDEX20")
-    if payload3 and payload3.get("data"):
-        result3 = _rows_from_mi_index20(payload3, 30)
+        result3 = _rows_from_stock_day_all(payload3, 30)
         if result3["results"]:
             return result3
 
-    raise RuntimeError(f"TWSE API empty or no data, last_status={status}")
+    # 方案四：STOCK_DAY_ALL（curl 備援）
+    for date_yyyymmdd in _recent_weekday_dates(5):
+        curl_url = f"{_TWSE_DAY_ALL_URL}?response=json&date={date_yyyymmdd}"
+        status4, text4 = _http_get_text_via_curl(curl_url)
+        app.logger.info(
+            "curl STOCK_DAY_ALL date=%s status=%s body=%s",
+            date_yyyymmdd,
+            status4,
+            text4[:200],
+        )
+        if not text4.strip():
+            continue
+        payload4 = _safe_json_loads(text4, f"curl STOCK_DAY_ALL:{date_yyyymmdd}")
+        if not payload4:
+            continue
+        result4 = _rows_from_stock_day_all(payload4, 30)
+        if result4["results"]:
+            return result4
+
+    raise RuntimeError("All TWSE data sources failed")
 
 
 def _fetch_limit_up_payload() -> dict[str, Any]:
+    # 方案一：MI_INDEX20 UP（requests）
     status, text = _http_get_text(_TWSE_UP_URL)
-    app.logger.info(
-        "TWSE MI_INDEX20 UP status=%s body_len=%s body=%s",
-        status,
-        len(text),
-        text[:200],
-    )
-    print(
-        f"TWSE limit_up status: {status}, body length: {len(text)}, body: {text[:200]}",
-        flush=True,
-    )
-
-    if status == 200:
+    app.logger.info("MI_INDEX20 UP status=%s body=%s", status, text[:300])
+    if status == 200 and text.strip():
         payload = _safe_json_loads(text, "MI_INDEX20 UP")
         if payload and payload.get("stat") == "OK" and payload.get("data"):
             result = _rows_from_mi_index20(payload, 999)
             if result["results"]:
                 return result
 
+    # 方案二：MI_INDEX20 UP（curl 備援）
+    status2, text2 = _http_get_text_via_curl(_TWSE_UP_URL)
+    app.logger.info("curl MI_INDEX20 UP status=%s body=%s", status2, text2[:300])
+    if text2.strip():
+        payload2 = _safe_json_loads(text2, "curl MI_INDEX20 UP")
+        if payload2 and payload2.get("data"):
+            result2 = _rows_from_mi_index20(payload2, 999)
+            if result2["results"]:
+                return result2
+
+    # 方案三：STOCK_DAY_ALL 掃描漲停股
     for date_yyyymmdd in _recent_weekday_dates(10):
-        status2, text2 = _http_get_text(
+        status3, text3 = _http_get_text(
             _TWSE_DAY_ALL_URL,
             params={"response": "json", "date": date_yyyymmdd},
         )
-        if status2 != 200 or not text2.strip():
+        app.logger.info(
+            "STOCK_DAY_ALL limit date=%s status=%s body=%s",
+            date_yyyymmdd,
+            status3,
+            text3[:200],
+        )
+        if status3 != 200 or not text3.strip():
             continue
-        payload2 = _safe_json_loads(text2, f"STOCK_DAY_ALL limit:{date_yyyymmdd}")
-        if not payload2 or payload2.get("stat") != "OK":
+        payload3 = _safe_json_loads(text3, f"STOCK_DAY_ALL limit:{date_yyyymmdd}")
+        if not payload3 or payload3.get("stat") != "OK":
             continue
-        all_rows = _rows_from_stock_day_all(payload2, 9999)
+        all_rows = _rows_from_stock_day_all(payload3, 9999)
+        limit_up = [r for r in all_rows["results"] if r["change_pct"] >= 9.5]
+        limit_up.sort(key=lambda x: (-x["change_pct"], x["code"]))
+        if limit_up:
+            return {"trade_date": all_rows["trade_date"], "results": limit_up}
+
+    # 方案四：STOCK_DAY_ALL（curl 備援）
+    for date_yyyymmdd in _recent_weekday_dates(5):
+        curl_url = f"{_TWSE_DAY_ALL_URL}?response=json&date={date_yyyymmdd}"
+        status4, text4 = _http_get_text_via_curl(curl_url)
+        app.logger.info(
+            "curl STOCK_DAY_ALL limit date=%s status=%s body=%s",
+            date_yyyymmdd,
+            status4,
+            text4[:200],
+        )
+        if not text4.strip():
+            continue
+        payload4 = _safe_json_loads(text4, f"curl STOCK_DAY_ALL limit:{date_yyyymmdd}")
+        if not payload4 or payload4.get("stat") != "OK":
+            continue
+        all_rows = _rows_from_stock_day_all(payload4, 9999)
         limit_up = [r for r in all_rows["results"] if r["change_pct"] >= 9.5]
         limit_up.sort(key=lambda x: (-x["change_pct"], x["code"]))
         if limit_up:
