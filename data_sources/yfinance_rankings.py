@@ -1,21 +1,22 @@
-"""yfinance 備援：量大排行 / 漲停（分塊並行下載 + 記憶體快取）。"""
+"""yfinance 備援：量大排行 / 漲停（高流動性標的 + 快取）。"""
 
 from __future__ import annotations
 
 import logging
+import math
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from typing import Any
 
+import pandas as pd
+
 logger = logging.getLogger(__name__)
 
-RANKING_YF_MAX_STOCKS = 320
-RANKING_YF_CHUNK_SIZE = 80
 RANKING_CACHE_TTL = timedelta(minutes=15)
 TWSE_BLOCK_TTL = timedelta(minutes=30)
+# 解析邏輯變更時遞增，避免沿用舊快取
+RANKING_CACHE_VERSION = 3
 
-# 高流動性個股優先（確保 2330 等權值股在取樣內）
 PRIORITY_LIQUID_CODES: tuple[str, ...] = (
     "2330", "2317", "2454", "2303", "2382", "2412", "2881", "2882", "2891",
     "2886", "2884", "2308", "3711", "3008", "2357", "2324", "3034", "2345",
@@ -29,10 +30,9 @@ PRIORITY_LIQUID_CODES: tuple[str, ...] = (
 
 _ranking_cache: list[dict[str, Any]] | None = None
 _ranking_cached_at: datetime | None = None
+_ranking_cache_version: int | None = None
 _ranking_fetch_lock = threading.Lock()
 _twse_blocked_until: datetime | None = None
-
-_yf_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="yf-rank")
 
 
 def is_twse_blocked(status: int, text: str) -> bool:
@@ -59,28 +59,60 @@ def mark_twse_blocked() -> None:
     )
 
 
-def _ranking_universe(max_stocks: int) -> list[dict[str, str]]:
+def _ranking_universe() -> list[dict[str, str]]:
     from data_sources.stock_list import get_stock_list
 
-    all_stocks = get_stock_list()
-    by_code = {s["code"]: s for s in all_stocks}
-    picked: list[dict[str, str]] = []
-    seen: set[str] = set()
+    by_code = {s["code"]: s for s in get_stock_list()}
+    return [by_code[code] for code in PRIORITY_LIQUID_CODES if code in by_code]
 
-    for code in PRIORITY_LIQUID_CODES:
-        stock = by_code.get(code)
-        if stock and code not in seen:
-            picked.append(stock)
-            seen.add(code)
 
-    for stock in all_stocks:
-        if len(picked) >= max_stocks:
-            break
-        if stock["code"] not in seen:
-            picked.append(stock)
-            seen.add(stock["code"])
+def _finite(value: object) -> float | None:
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(number) or math.isinf(number) or number <= 0:
+        return None
+    return number
 
-    return picked[:max_stocks]
+
+def _extract_quote(ticker_data: pd.DataFrame) -> dict[str, float] | None:
+    """從 yfinance 歷史資料萃取報價。
+
+    當日若只有成交量、Close 為 NaN（盤中或未收盤），改取最近有效收盤價；
+    成交量一律取最新一筆有效值（供 Top 排行用）。
+    """
+    if ticker_data.empty:
+        return None
+
+    df = ticker_data.sort_index()
+    volumes = df["Volume"].apply(lambda v: _finite(v))
+    valid_volume = volumes.dropna()
+    if valid_volume.empty:
+        return None
+    volume = int(valid_volume.iloc[-1])
+
+    closes = df["Close"].apply(lambda v: _finite(v))
+    valid_closes = closes.dropna()
+    if valid_closes.empty:
+        return None
+
+    close = round(float(valid_closes.iloc[-1]), 2)
+    if len(valid_closes) >= 2:
+        prev_close = round(float(valid_closes.iloc[-2]), 2)
+    else:
+        prev_close = close
+
+    change = round(close - prev_close, 2)
+    change_pct = (
+        round(change / prev_close * 100, 2) if prev_close > 0 else 0.0
+    )
+    return {
+        "close": close,
+        "volume": float(volume),
+        "change": change,
+        "change_pct": change_pct,
+    }
 
 
 def _parse_yf_download(
@@ -107,34 +139,19 @@ def _parse_yf_download(
                 else:
                     continue
 
-            if ticker_data.empty:
+            quote = _extract_quote(ticker_data)
+            if quote is None:
                 continue
 
-            row = ticker_data.iloc[-1]
-            volume = int(row.get("Volume", 0) or 0)
-            close = float(row.get("Close", 0) or 0)
-            if volume <= 0 or close <= 0:
-                continue
-
-            prev_rows = ticker_data.iloc[:-1]
-            prev_close = (
-                float(prev_rows.iloc[-1]["Close"])
-                if not prev_rows.empty
-                else close
-            )
-            change = round(close - prev_close, 2)
-            change_pct = (
-                round(change / prev_close * 100, 2) if prev_close > 0 else 0.0
-            )
             results.append(
                 {
                     "symbol": sym,
                     "code": stock["code"],
                     "name": stock["name"],
-                    "close": close,
-                    "change": change,
-                    "change_pct": change_pct,
-                    "volume": volume,
+                    "close": quote["close"],
+                    "change": quote["change"],
+                    "change_pct": quote["change_pct"],
+                    "volume": int(quote["volume"]),
                 }
             )
         except Exception:
@@ -143,19 +160,19 @@ def _parse_yf_download(
     return results
 
 
-def _download_chunk(stocks: list[dict[str, str]]) -> list[dict[str, Any]]:
+def _fetch_yfinance_rows() -> list[dict[str, Any]]:
     import yfinance as yf
 
+    stocks = _ranking_universe()
     if not stocks:
         return []
 
-    symbols = [
-        s.get("symbol") or f"{s['code']}.TW"
-        for s in stocks
-    ]
+    symbols = [s.get("symbol") or f"{s['code']}.TW" for s in stocks]
+    logger.info("ranking yfinance 單批下載 %d 檔", len(symbols))
+
     data = yf.download(
         symbols,
-        period="2d",
+        period="5d",
         interval="1d",
         group_by="ticker",
         auto_adjust=True,
@@ -165,41 +182,33 @@ def _download_chunk(stocks: list[dict[str, str]]) -> list[dict[str, Any]]:
     return _parse_yf_download(data, stocks, symbols)
 
 
+def _cache_has_valid_quotes(rows: list[dict[str, Any]] | None) -> bool:
+    if not rows:
+        return False
+    return any((r.get("close") or 0) > 0 for r in rows)
+
+
 def fetch_all_ranking_rows() -> list[dict[str, Any]]:
     """取得 yfinance 排行用原始列（含快取，Top / limit-up 共用）。"""
-    global _ranking_cache, _ranking_cached_at
+    global _ranking_cache, _ranking_cached_at, _ranking_cache_version
 
     now = datetime.now()
     with _ranking_fetch_lock:
-        if (
+        cache_valid = (
             _ranking_cache is not None
             and _ranking_cached_at is not None
+            and _ranking_cache_version == RANKING_CACHE_VERSION
             and now - _ranking_cached_at < RANKING_CACHE_TTL
-        ):
+            and _cache_has_valid_quotes(_ranking_cache)
+        )
+        if cache_valid:
             logger.info("ranking yfinance 快取命中 (%d 筆)", len(_ranking_cache))
             return list(_ranking_cache)
 
-        stocks = _ranking_universe(RANKING_YF_MAX_STOCKS)
-        chunks = [
-            stocks[i : i + RANKING_YF_CHUNK_SIZE]
-            for i in range(0, len(stocks), RANKING_YF_CHUNK_SIZE)
-        ]
-        logger.info(
-            "ranking yfinance 開始下載 %d 檔 (%d 批)",
-            len(stocks),
-            len(chunks),
-        )
-
-        merged: list[dict[str, Any]] = []
-        futures = [_yf_executor.submit(_download_chunk, chunk) for chunk in chunks]
-        for fut in as_completed(futures, timeout=120):
-            try:
-                merged.extend(fut.result(timeout=90))
-            except Exception as exc:
-                logger.warning("yfinance ranking chunk failed: %s", exc)
-
+        merged = _fetch_yfinance_rows()
         _ranking_cache = merged
         _ranking_cached_at = datetime.now()
+        _ranking_cache_version = RANKING_CACHE_VERSION
         logger.info("ranking yfinance 完成 %d 筆", len(merged))
         return list(merged)
 
