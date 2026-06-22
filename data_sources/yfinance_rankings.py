@@ -1,18 +1,21 @@
-"""yfinance 備援：量大排行 / 漲停（僅高流動性標的 + 快取）。"""
+"""yfinance 備援：量大排行 / 漲停（分塊並行下載 + 記憶體快取）。"""
 
 from __future__ import annotations
 
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
+RANKING_YF_MAX_STOCKS = 320
+RANKING_YF_CHUNK_SIZE = 80
 RANKING_CACHE_TTL = timedelta(minutes=15)
 TWSE_BLOCK_TTL = timedelta(minutes=30)
 
-# 只取高流動性標的：Top 10 成交量幾乎都在此池；limit-up 備援亦足夠。
+# 高流動性個股優先（確保 2330 等權值股在取樣內）
 PRIORITY_LIQUID_CODES: tuple[str, ...] = (
     "2330", "2317", "2454", "2303", "2382", "2412", "2881", "2882", "2891",
     "2886", "2884", "2308", "3711", "3008", "2357", "2324", "3034", "2345",
@@ -28,6 +31,8 @@ _ranking_cache: list[dict[str, Any]] | None = None
 _ranking_cached_at: datetime | None = None
 _ranking_fetch_lock = threading.Lock()
 _twse_blocked_until: datetime | None = None
+
+_yf_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="yf-rank")
 
 
 def is_twse_blocked(status: int, text: str) -> bool:
@@ -54,16 +59,28 @@ def mark_twse_blocked() -> None:
     )
 
 
-def _ranking_universe() -> list[dict[str, str]]:
+def _ranking_universe(max_stocks: int) -> list[dict[str, str]]:
     from data_sources.stock_list import get_stock_list
 
-    by_code = {s["code"]: s for s in get_stock_list()}
+    all_stocks = get_stock_list()
+    by_code = {s["code"]: s for s in all_stocks}
     picked: list[dict[str, str]] = []
+    seen: set[str] = set()
+
     for code in PRIORITY_LIQUID_CODES:
         stock = by_code.get(code)
-        if stock:
+        if stock and code not in seen:
             picked.append(stock)
-    return picked
+            seen.add(code)
+
+    for stock in all_stocks:
+        if len(picked) >= max_stocks:
+            break
+        if stock["code"] not in seen:
+            picked.append(stock)
+            seen.add(stock["code"])
+
+    return picked[:max_stocks]
 
 
 def _parse_yf_download(
@@ -126,16 +143,16 @@ def _parse_yf_download(
     return results
 
 
-def _fetch_yfinance_rows() -> list[dict[str, Any]]:
+def _download_chunk(stocks: list[dict[str, str]]) -> list[dict[str, Any]]:
     import yfinance as yf
 
-    stocks = _ranking_universe()
     if not stocks:
         return []
 
-    symbols = [s.get("symbol") or f"{s['code']}.TW" for s in stocks]
-    logger.info("ranking yfinance 單批下載 %d 檔", len(symbols))
-
+    symbols = [
+        s.get("symbol") or f"{s['code']}.TW"
+        for s in stocks
+    ]
     data = yf.download(
         symbols,
         period="2d",
@@ -162,7 +179,25 @@ def fetch_all_ranking_rows() -> list[dict[str, Any]]:
             logger.info("ranking yfinance 快取命中 (%d 筆)", len(_ranking_cache))
             return list(_ranking_cache)
 
-        merged = _fetch_yfinance_rows()
+        stocks = _ranking_universe(RANKING_YF_MAX_STOCKS)
+        chunks = [
+            stocks[i : i + RANKING_YF_CHUNK_SIZE]
+            for i in range(0, len(stocks), RANKING_YF_CHUNK_SIZE)
+        ]
+        logger.info(
+            "ranking yfinance 開始下載 %d 檔 (%d 批)",
+            len(stocks),
+            len(chunks),
+        )
+
+        merged: list[dict[str, Any]] = []
+        futures = [_yf_executor.submit(_download_chunk, chunk) for chunk in chunks]
+        for fut in as_completed(futures, timeout=120):
+            try:
+                merged.extend(fut.result(timeout=90))
+            except Exception as exc:
+                logger.warning("yfinance ranking chunk failed: %s", exc)
+
         _ranking_cache = merged
         _ranking_cached_at = datetime.now()
         logger.info("ranking yfinance 完成 %d 筆", len(merged))
