@@ -8,4 +8,5 @@ python-dateutil
 beautifulsoup4
 apscheduler
 gunicorn
+gevent
 gevent-websocket

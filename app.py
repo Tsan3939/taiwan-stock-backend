@@ -1,3 +1,8 @@
+# 必須是整個檔案的第一行，在任何其他 import 之前
+from gevent import monkey
+
+monkey.patch_all()
+
 import json
 import logging
 import os
