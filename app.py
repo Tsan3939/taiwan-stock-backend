@@ -95,7 +95,10 @@ def _fetch_twse_json_via_curl(url: str) -> dict[str, Any]:
     )
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or f"curl exit {proc.returncode}")
-    return json.loads(proc.stdout)
+    body = (proc.stdout or "").strip()
+    if not body:
+        return {"stat": "OK", "fields": [], "data": [], "title": ""}
+    return json.loads(body)
 
 
 def _fetch_twse_json(url: str) -> dict[str, Any]:
