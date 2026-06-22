@@ -1,10 +1,13 @@
+import logging
 import os
+import traceback
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from indicators.chart_data import compute_chart_data
 
 chart_bp = Blueprint("chart", __name__)
+logger = logging.getLogger(__name__)
 USE_MOCK = os.environ.get("USE_MOCK_DATA", "false").lower() == "true"
 
 
@@ -46,14 +49,25 @@ def chart():
     start_date = request.args.get("start_date", "").strip()
     end_date = request.args.get("end_date", "").strip()
 
-    if not symbol or not start_date or not end_date:
-        return jsonify({"error": "缺少 symbol、start_date 或 end_date"}), 400
+    try:
+        if not symbol or not start_date or not end_date:
+            return jsonify({"error": "缺少 symbol、start_date 或 end_date"}), 400
 
-    if USE_MOCK:
-        return jsonify({"symbol": symbol, "data": _mock_chart_data()})
+        if USE_MOCK:
+            return jsonify({"symbol": symbol, "data": _mock_chart_data()})
 
-    data = compute_chart_data(symbol, start_date, end_date)
-    if not data:
-        return jsonify({"error": "查無此股票代碼或資料來源暫時無法取得"}), 404
+        data = compute_chart_data(symbol, start_date, end_date)
+        if not data:
+            return jsonify({"error": "查無此股票代碼或資料來源暫時無法取得"}), 404
 
-    return jsonify({"symbol": symbol, "data": data})
+        return jsonify({"symbol": symbol, "data": data})
+    except Exception as exc:
+        detail = traceback.format_exc()
+        logger.exception(
+            "stock chart error symbol=%s start=%s end=%s",
+            symbol,
+            start_date,
+            end_date,
+        )
+        current_app.logger.error("stock data error: %s", detail)
+        return jsonify({"error": str(exc), "detail": detail}), 500

@@ -1,7 +1,7 @@
 import logging
 import os
 
-from flask import Flask
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_sock import Sock
 
@@ -27,6 +27,16 @@ app.register_blueprint(rankings_bp)
 app.register_blueprint(chart_bp)
 
 
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({"error": "route not found", "path": request.path}), 404
+
+
+@app.errorhandler(500)
+def server_error(e):
+    return jsonify({"error": str(e)}), 500
+
+
 @sock.route("/ws")
 def websocket_route(ws):
     handle_websocket(ws, use_mock=USE_MOCK)
@@ -34,7 +44,7 @@ def websocket_route(ws):
 
 @app.route("/health")
 def health():
-    return {"status": "ok"}
+    return jsonify({"status": "ok"})
 
 
 with app.app_context():
