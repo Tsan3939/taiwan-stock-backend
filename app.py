@@ -1,10 +1,11 @@
 import json
 import logging
 import os
+import subprocess
 import sys
 import traceback
 import urllib.error
-import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from flask import Flask, Response, jsonify, request
@@ -37,6 +38,9 @@ _TWSE_UP_URL = (
     "?response=json&type=UP"
 )
 
+# gevent worker 下直接在 greenlet 做 HTTPS 可能 RecursionError，改在真實 thread 執行
+_http_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="twse-http")
+
 app.register_blueprint(search_bp)
 app.register_blueprint(chart_bp)
 
@@ -50,24 +54,8 @@ def _json_response(payload: dict[str, Any], status: int = 200) -> Response:
     )
 
 
-def _fetch_twse_json(url: str) -> dict[str, Any]:
-    """取 TWSE JSON。手動逐次 follow redirect，避免 requests/gevent 內部遞迴。"""
-    import ssl
-
-    # 1) 優先 stdlib urllib（Linux/Render 通常正常）
-    ctx = ssl.create_default_context()
-    req = urllib.request.Request(url, headers=_TWSE_UA)
-    try:
-        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
-            charset = resp.headers.get_content_charset() or "utf-8"
-            body = resp.read().decode(charset, errors="replace")
-        payload = json.loads(body)
-        if payload.get("fields") or payload.get("data"):
-            return payload
-    except (urllib.error.URLError, ssl.SSLError, json.JSONDecodeError) as exc:
-        app.logger.warning("urllib TWSE fetch fallback to requests: %s", exc)
-
-    # 2) requests 手動 redirect（allow_redirects=False，最多 5 次）
+def _fetch_twse_json_blocking(url: str) -> dict[str, Any]:
+    """在 blocking thread 內取 TWSE JSON（避開 gevent SSL 遞迴）。"""
     import requests as http_client
 
     current = url
@@ -88,6 +76,39 @@ def _fetch_twse_json(url: str) -> dict[str, Any]:
         return resp.json()
 
     raise RuntimeError("TWSE redirect loop or empty response")
+
+
+def _fetch_twse_json_via_curl(url: str) -> dict[str, Any]:
+    proc = subprocess.run(
+        [
+            "curl",
+            "-sS",
+            "--max-time",
+            "15",
+            "-H",
+            "User-Agent: Mozilla/5.0",
+            url,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.strip() or f"curl exit {proc.returncode}")
+    return json.loads(proc.stdout)
+
+
+def _fetch_twse_json(url: str) -> dict[str, Any]:
+    """取 TWSE JSON：thread pool → curl 備援。"""
+    try:
+        future = _http_executor.submit(_fetch_twse_json_blocking, url)
+        return future.result(timeout=20)
+    except RecursionError:
+        app.logger.warning("TWSE fetch RecursionError in thread, try curl")
+        return _fetch_twse_json_via_curl(url)
+    except Exception as exc:
+        app.logger.warning("TWSE thread fetch failed (%s), try curl", exc)
+        return _fetch_twse_json_via_curl(url)
 
 
 def _parse_number(value: Any) -> float:
