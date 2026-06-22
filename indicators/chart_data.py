@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -18,6 +19,36 @@ logger = logging.getLogger(__name__)
 # 最長回看：MA20(20)、RSI12(13)、KD(5+2) → 取 60 交易日緩衝
 INDICATOR_BUFFER_TRADING_DAYS = 60
 BUFFER_CALENDAR_DAYS = 90
+
+
+def _finite_price(value: object) -> float | None:
+    """轉成有限浮點數；NaN/Infinity 回傳 None（不可序列化為標準 JSON）。"""
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(number) or math.isinf(number):
+        return None
+    return round(number, 2)
+
+
+def _drop_invalid_rows(rows: list[dict]) -> list[dict]:
+    """移除 OHLC 含 NaN 或缺必要欄位的列（常見於 yfinance 未來日期）。"""
+    cleaned: list[dict] = []
+    for row in rows:
+        if all(
+            _finite_price(row.get(key)) is not None
+            for key in ("open", "high", "low", "close")
+        ):
+            cleaned.append(row)
+        else:
+            logger.debug("略過無效 OHLC date=%s", row.get("date"))
+    return cleaned
+
+
+def _clip_end_date(end_date: str) -> str:
+    today = datetime.now().strftime("%Y-%m-%d")
+    return min(end_date, today)
 
 
 def _rolling_mean(values: list[float | None], window: int) -> list[float | None]:
@@ -41,16 +72,29 @@ def _build_rows(
     rows: list[dict] = []
     for date_idx, row in ohlcv_df.iterrows():
         date_key = date_idx.strftime("%Y-%m-%d")
+        open_p = _finite_price(row["Open"])
+        high_p = _finite_price(row["High"])
+        low_p = _finite_price(row["Low"])
+        close_p = _finite_price(row["Close"])
+        if open_p is None or high_p is None or low_p is None or close_p is None:
+            logger.debug("略過無效 OHLC date=%s", date_key)
+            continue
+
+        volume_raw = row["Volume"]
+        if pd.isna(volume_raw):
+            logger.debug("略過無成交量 date=%s", date_key)
+            continue
+
         raw_avg = avg_lot_map.get(date_key)
         avg_lot = round(raw_avg, 2) if raw_avg is not None else None
         rows.append(
             {
                 "date": date_key,
-                "open": round(float(row["Open"]), 2),
-                "high": round(float(row["High"]), 2),
-                "low": round(float(row["Low"]), 2),
-                "close": round(float(row["Close"]), 2),
-                "volume": int(row["Volume"]),
+                "open": open_p,
+                "high": high_p,
+                "low": low_p,
+                "close": close_p,
+                "volume": int(volume_raw),
                 "avg_lot": avg_lot,
             }
         )
@@ -102,11 +146,12 @@ def _slice_display_range(
 def compute_chart_data(
     symbol: str, start_date: str, end_date: str
 ) -> list[dict]:
+    end_date = _clip_end_date(end_date)
     fetch_start = _buffer_start(start_date)
 
     cached = chart_cache.get(symbol, fetch_start, end_date)
     if cached is not None:
-        full_rows = cached
+        full_rows = _drop_invalid_rows(cached)
     else:
         logger.info(
             "抓取含緩衝資料 symbol=%s fetch=%s~%s (顯示 %s~%s)",
@@ -126,9 +171,12 @@ def compute_chart_data(
         full_rows = _build_rows(ohlcv_df, avg_lot_map)
         _forward_fill_avg_lot(full_rows)
         full_rows = _compute_indicators(full_rows)
+        full_rows = _drop_invalid_rows(full_rows)
         chart_cache.put(symbol, fetch_start, end_date, full_rows)
 
-    display_rows = _slice_display_range(full_rows, start_date, end_date)
+    display_rows = _drop_invalid_rows(
+        _slice_display_range(full_rows, start_date, end_date)
+    )
     logger.debug(
         "回傳顯示區間 symbol=%s %s~%s (%d 筆)",
         symbol,

@@ -5,6 +5,7 @@ monkey.patch_all()
 
 import json
 import logging
+import math
 import os
 import subprocess
 import sys
@@ -59,9 +60,40 @@ def _twse_headers() -> dict[str, str]:
     }
 
 
+def _sanitize_json_value(value: Any) -> Any:
+    """NaN/Infinity 不是標準 JSON，Dart jsonDecode 會失敗。"""
+    if value is None:
+        return None
+    if isinstance(value, (str, bool)):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            return None
+        return value
+    if hasattr(value, "item"):
+        try:
+            return _sanitize_json_value(value.item())
+        except (TypeError, ValueError):
+            pass
+    if isinstance(value, dict):
+        return {k: _sanitize_json_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_json_value(v) for v in value]
+    try:
+        number = float(value)
+        if math.isnan(number) or math.isinf(number):
+            return None
+        return number
+    except (TypeError, ValueError):
+        return value
+
+
 def _json_response(payload: dict[str, Any], status: int = 200) -> Response:
+    safe = _sanitize_json_value(payload)
     return Response(
-        json.dumps(payload, ensure_ascii=False),
+        json.dumps(safe, ensure_ascii=False, allow_nan=False),
         status=status,
         mimetype="application/json",
     )

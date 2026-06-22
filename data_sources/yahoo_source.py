@@ -39,6 +39,7 @@ def fetch_ohlcv(
             df = df.copy()
             df.index = pd.to_datetime(df.index).tz_localize(None)
             df.index = df.index.normalize()
+            df = df.dropna(subset=["Open", "High", "Low", "Close"])
             return df
         except Exception as exc:
             last_error = exc
