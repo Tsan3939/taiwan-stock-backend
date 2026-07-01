@@ -471,6 +471,7 @@ def _mock_chart_data() -> list[dict]:
             "low": 41.5,
             "close": 43.0,
             "volume": 12500000,
+            "trade_count": 6780,
             "avg_lot": 1.85,
         },
     ]

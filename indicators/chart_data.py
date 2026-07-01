@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 from data_sources import yahoo_source
-from indicators.avg_lot import compute_avg_lot
+from indicators.avg_lot import compute_avg_lot, fetch_trade_counts
 from indicators.chart_cache import chart_cache
 from indicators.rsi import compute_rsi
 from indicators.stochastic import compute_fast_kd
@@ -67,7 +67,9 @@ def _buffer_start(start_date: str) -> str:
 
 
 def _build_rows(
-    ohlcv_df: pd.DataFrame, avg_lot_map: dict[str, float | None]
+    ohlcv_df: pd.DataFrame,
+    avg_lot_map: dict[str, float | None],
+    trade_count_map: dict[str, float],
 ) -> list[dict]:
     rows: list[dict] = []
     for date_idx, row in ohlcv_df.iterrows():
@@ -87,6 +89,7 @@ def _build_rows(
 
         raw_avg = avg_lot_map.get(date_key)
         avg_lot = round(raw_avg, 2) if raw_avg is not None else None
+        trade_count = int(trade_count_map.get(date_key, 0))
         rows.append(
             {
                 "date": date_key,
@@ -95,11 +98,22 @@ def _build_rows(
                 "low": low_p,
                 "close": close_p,
                 "volume": int(volume_raw),
+                "trade_count": trade_count,
                 "avg_lot": avg_lot,
             }
         )
     rows.sort(key=lambda r: r["date"])
     return rows
+
+
+def _ensure_trade_counts(
+    rows: list[dict], symbol: str, fetch_start: str, end_date: str
+) -> None:
+    if not rows or "trade_count" in rows[0]:
+        return
+    trade_count_map = fetch_trade_counts(symbol, fetch_start, end_date)
+    for row in rows:
+        row["trade_count"] = int(trade_count_map.get(row["date"], 0))
 
 
 def _forward_fill_avg_lot(rows: list[dict]) -> None:
@@ -152,6 +166,7 @@ def compute_chart_data(
     cached = chart_cache.get(symbol, fetch_start, end_date)
     if cached is not None:
         full_rows = _drop_invalid_rows(cached)
+        _ensure_trade_counts(full_rows, symbol, fetch_start, end_date)
     else:
         logger.info(
             "抓取含緩衝資料 symbol=%s fetch=%s~%s (顯示 %s~%s)",
@@ -164,11 +179,12 @@ def compute_chart_data(
         ohlcv_df = yahoo_source.fetch_ohlcv(symbol, fetch_start, end_date)
         avg_lot_points = compute_avg_lot(symbol, fetch_start, end_date)
         avg_lot_map = {p.date: p.value for p in avg_lot_points}
+        trade_count_map = fetch_trade_counts(symbol, fetch_start, end_date)
 
         if ohlcv_df.empty:
             return []
 
-        full_rows = _build_rows(ohlcv_df, avg_lot_map)
+        full_rows = _build_rows(ohlcv_df, avg_lot_map, trade_count_map)
         _forward_fill_avg_lot(full_rows)
         full_rows = _compute_indicators(full_rows)
         full_rows = _drop_invalid_rows(full_rows)

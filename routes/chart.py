@@ -20,6 +20,7 @@ def _mock_chart_data() -> list[dict]:
             "low": 41.5,
             "close": 43.0,
             "volume": 12500000,
+            "trade_count": 6780,
             "avg_lot": 1.85,
         },
         {
@@ -29,6 +30,7 @@ def _mock_chart_data() -> list[dict]:
             "low": 42.8,
             "close": 44.0,
             "volume": 15200000,
+            "trade_count": 7234,
             "avg_lot": 2.10,
         },
         {
@@ -38,6 +40,7 @@ def _mock_chart_data() -> list[dict]:
             "low": 43.5,
             "close": 44.5,
             "volume": 9800000,
+            "trade_count": 5690,
             "avg_lot": 1.72,
         },
     ]

@@ -31,6 +31,13 @@ def _parse_number(value: str | int | float | None) -> float:
         return 0.0
 
 
+def fetch_trade_counts(
+    symbol: str, start_date: str, end_date: str
+) -> dict[str, float]:
+    """成交筆數來自 FinMind（yfinance 無此欄位）。回傳 {YYYY-MM-DD: trade_count}。"""
+    return _fetch_trade_counts(symbol, start_date, end_date)
+
+
 def _fetch_trade_counts(
     symbol: str, start_date: str, end_date: str
 ) -> dict[str, float]:
