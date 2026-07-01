@@ -66,6 +66,22 @@ def _buffer_start(start_date: str) -> str:
     return dt.strftime("%Y-%m-%d")
 
 
+def _align_maps_to_ohlcv_dates(
+    ohlcv_df: pd.DataFrame,
+    avg_lot_map: dict[str, float | None],
+    trade_count_map: dict[str, float],
+) -> tuple[dict[str, float | None], dict[str, float]]:
+    """以 K 線 OHLCV 的交易日為基準，對齊均張與成交筆數。"""
+    trading_dates = [
+        date_idx.strftime("%Y-%m-%d")
+        for date_idx in ohlcv_df.index
+        if hasattr(date_idx, "strftime")
+    ]
+    aligned_avg = {d: avg_lot_map.get(d) for d in trading_dates}
+    aligned_trade = {d: trade_count_map.get(d, 0.0) for d in trading_dates}
+    return aligned_avg, aligned_trade
+
+
 def _build_rows(
     ohlcv_df: pd.DataFrame,
     avg_lot_map: dict[str, float | None],
@@ -189,6 +205,9 @@ def compute_chart_data(
         avg_lot_points = compute_avg_lot(symbol, fetch_start, end_date)
         avg_lot_map = {p.date: p.value for p in avg_lot_points}
         trade_count_map = fetch_trade_counts(symbol, fetch_start, end_date)
+        avg_lot_map, trade_count_map = _align_maps_to_ohlcv_dates(
+            ohlcv_df, avg_lot_map, trade_count_map
+        )
 
         if ohlcv_df.empty:
             return []
