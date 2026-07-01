@@ -16,9 +16,9 @@ from indicators.stochastic import compute_fast_kd
 
 logger = logging.getLogger(__name__)
 
-# 最長回看：MA20(20)、RSI12(13)、KD(5+2) → 取 60 交易日緩衝
-INDICATOR_BUFFER_TRADING_DAYS = 60
-BUFFER_CALENDAR_DAYS = 90
+# 最長回看：MA120(120)、RSI12、KD → 取足夠緩衝
+INDICATOR_BUFFER_TRADING_DAYS = 130
+BUFFER_CALENDAR_DAYS = 200
 
 
 def _finite_price(value: object) -> float | None:
@@ -135,6 +135,8 @@ def _compute_indicators(rows: list[dict]) -> list[dict]:
     ma5 = _rolling_mean(closes, 5)
     ma10 = _rolling_mean(closes, 10)
     ma20 = _rolling_mean(closes, 20)
+    ma60 = _rolling_mean(closes, 60)
+    ma120 = _rolling_mean(closes, 120)
     rsi6 = compute_rsi(closes, 6)
     rsi12 = compute_rsi(closes, 12)
     fk, fd = compute_fast_kd(highs, lows, closes, k_period=5, d_period=2)
@@ -143,6 +145,8 @@ def _compute_indicators(rows: list[dict]) -> list[dict]:
         row["ma5"] = ma5[i]
         row["ma10"] = ma10[i]
         row["ma20"] = ma20[i]
+        row["ma60"] = ma60[i]
+        row["ma120"] = ma120[i]
         row["rsi6"] = rsi6[i]
         row["rsi12"] = rsi12[i]
         row["fk"] = fk[i]
