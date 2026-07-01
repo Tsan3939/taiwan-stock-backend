@@ -16,9 +16,9 @@ from indicators.stochastic import compute_fast_kd
 
 logger = logging.getLogger(__name__)
 
-# 最長回看：MA120(120)、RSI12、KD → 取足夠緩衝
-INDICATOR_BUFFER_TRADING_DAYS = 130
-BUFFER_CALENDAR_DAYS = 200
+# 最長回看：MA240(240)、RSI12、KD → 取約 380 曆日緩衝
+INDICATOR_BUFFER_TRADING_DAYS = 260
+BUFFER_CALENDAR_DAYS = 380
 
 
 def _finite_price(value: object) -> float | None:
@@ -137,6 +137,7 @@ def _compute_indicators(rows: list[dict]) -> list[dict]:
     ma20 = _rolling_mean(closes, 20)
     ma60 = _rolling_mean(closes, 60)
     ma120 = _rolling_mean(closes, 120)
+    ma240 = _rolling_mean(closes, 240)
     rsi6 = compute_rsi(closes, 6)
     rsi12 = compute_rsi(closes, 12)
     fk, fd = compute_fast_kd(highs, lows, closes, k_period=5, d_period=2)
@@ -147,6 +148,7 @@ def _compute_indicators(rows: list[dict]) -> list[dict]:
         row["ma20"] = ma20[i]
         row["ma60"] = ma60[i]
         row["ma120"] = ma120[i]
+        row["ma240"] = ma240[i]
         row["rsi6"] = rsi6[i]
         row["rsi12"] = rsi12[i]
         row["fk"] = fk[i]
@@ -171,6 +173,9 @@ def compute_chart_data(
     if cached is not None:
         full_rows = _drop_invalid_rows(cached)
         _ensure_trade_counts(full_rows, symbol, fetch_start, end_date)
+        if full_rows and "ma240" not in full_rows[0]:
+            full_rows = _compute_indicators(full_rows)
+            chart_cache.put(symbol, fetch_start, end_date, full_rows)
     else:
         logger.info(
             "抓取含緩衝資料 symbol=%s fetch=%s~%s (顯示 %s~%s)",
