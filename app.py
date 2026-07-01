@@ -45,7 +45,7 @@ sock = Sock(app)
 USE_MOCK = os.environ.get("USE_MOCK_DATA", "false").lower() == "true"
 
 # 量大排行 / 漲停股 API 回傳筆數上限
-RANKING_DISPLAY_LIMIT = 10
+RANKING_DISPLAY_LIMIT = 50
 
 _TWSE_MS_URL = (
     "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX20"
@@ -402,34 +402,55 @@ def _try_yahoo_tw_limit_up() -> dict[str, Any] | None:
 
 
 def _fetch_top_volume_payload() -> dict[str, Any]:
+    # MI_INDEX20 最多 20 筆；需 50 筆時優先全市場日資料與 Yahoo 排行
+    if RANKING_DISPLAY_LIMIT > 20:
+        result = _try_twse_stock_day_all(RANKING_DISPLAY_LIMIT)
+        if result:
+            return result
+
+        result = _try_yahoo_tw_top()
+        if result:
+            return result
+
     result = _try_twse_mi_index20(_TWSE_MS_URL, "MI_INDEX20", RANKING_DISPLAY_LIMIT)
     if result:
         return result
 
-    result = _try_yahoo_tw_top()
-    if result:
-        return result
+    if RANKING_DISPLAY_LIMIT <= 20:
+        result = _try_yahoo_tw_top()
+        if result:
+            return result
 
-    result = _try_twse_stock_day_all(RANKING_DISPLAY_LIMIT)
-    if result:
-        return result
+        result = _try_twse_stock_day_all(RANKING_DISPLAY_LIMIT)
+        if result:
+            return result
 
     app.logger.info("top_volume 使用 yfinance 備援")
     return _build_top_volume_yfinance(RANKING_DISPLAY_LIMIT)
 
 
 def _fetch_limit_up_payload() -> dict[str, Any]:
+    if RANKING_DISPLAY_LIMIT > 20:
+        result = _try_twse_stock_day_all(9999)
+        if result:
+            return result
+
+        result = _try_yahoo_tw_limit_up()
+        if result:
+            return result
+
     result = _try_twse_mi_index20(_TWSE_UP_URL, "MI_INDEX20 UP", RANKING_DISPLAY_LIMIT)
     if result:
         return result
 
-    result = _try_yahoo_tw_limit_up()
-    if result:
-        return result
+    if RANKING_DISPLAY_LIMIT <= 20:
+        result = _try_yahoo_tw_limit_up()
+        if result:
+            return result
 
-    result = _try_twse_stock_day_all(9999)
-    if result:
-        return result
+        result = _try_twse_stock_day_all(9999)
+        if result:
+            return result
 
     app.logger.info("limit_up 使用 yfinance 備援")
     return _build_limit_up_yfinance(RANKING_DISPLAY_LIMIT)

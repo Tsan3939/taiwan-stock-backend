@@ -11,7 +11,7 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 REQUEST_TIMEOUT = 20
-RANKING_DISPLAY_LIMIT = 10
+RANKING_DISPLAY_LIMIT = 50
 TWSE_DAY_ALL = "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL"
 TPEX_DAILY_OPENAPI = (
     "https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes"

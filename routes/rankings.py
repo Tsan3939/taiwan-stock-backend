@@ -17,7 +17,7 @@ from flask import Blueprint, jsonify
 rankings_bp = Blueprint("rankings", __name__)
 logger = logging.getLogger(__name__)
 
-RANKING_DISPLAY_LIMIT = 10
+RANKING_DISPLAY_LIMIT = 50
 
 _TWSE_HEADERS = {"User-Agent": "Mozilla/5.0"}
 _TWSE_MS_URL = (

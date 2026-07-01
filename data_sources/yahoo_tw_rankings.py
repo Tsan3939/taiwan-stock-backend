@@ -116,12 +116,12 @@ def _fetch_cached(kind: str, url: str, limit: int) -> dict[str, Any]:
     }
 
 
-def fetch_top_volume(limit: int = 10) -> dict[str, Any]:
+def fetch_top_volume(limit: int = 50) -> dict[str, Any]:
     return _fetch_cached("volume", _VOLUME_URL, limit)
 
 
-def fetch_limit_up(limit: int = 10) -> dict[str, Any]:
-    payload = _fetch_cached("change_up", _CHANGE_UP_URL, 50)
+def fetch_limit_up(limit: int = 50) -> dict[str, Any]:
+    payload = _fetch_cached("change_up", _CHANGE_UP_URL, max(limit, 50))
     limit_up = [
         r
         for r in payload["results"]
