@@ -103,9 +103,15 @@ def _build_rows(
             logger.debug("略過無成交量 date=%s", date_key)
             continue
 
+        volume_lots = int(volume_raw) / 1000.0
         raw_avg = avg_lot_map.get(date_key)
-        avg_lot = round(raw_avg, 2) if raw_avg is not None else None
         trade_count = int(trade_count_map.get(date_key, 0))
+        if raw_avg is not None:
+            avg_lot = round(raw_avg, 2)
+        elif trade_count > 0:
+            avg_lot = round(volume_lots / trade_count, 2)
+        else:
+            avg_lot = None
         rows.append(
             {
                 "date": date_key,
