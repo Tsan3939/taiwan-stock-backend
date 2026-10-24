@@ -10,3 +10,4 @@ apscheduler
 gunicorn
 gevent
 gevent-websocket
+packaging
