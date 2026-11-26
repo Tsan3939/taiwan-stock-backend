@@ -9,6 +9,7 @@ import math
 import os
 import subprocess
 import sys
+import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -547,6 +548,49 @@ def route_limit_up():
         }, 500)
 
 
+def _fetch_foreign_blocking(symbol: str, start_date: str, end_date: str) -> list[dict]:
+    from data_sources.foreign_flow import fetch_foreign_flow
+
+    return fetch_foreign_flow(symbol, start_date, end_date)
+
+
+def _mock_foreign_data() -> list[dict]:
+    return [
+        {"date": "2026-01-20", "net_buy_lots": -12695, "holding_lots": 17785261},
+        {"date": "2026-01-21", "net_buy_lots": 3200, "holding_lots": 17788461},
+        {"date": "2026-01-22", "net_buy_lots": -800, "holding_lots": 17787661},
+    ]
+
+
+@app.route("/api/stocks/foreign", methods=["GET"])
+def route_foreign():
+    symbol = request.args.get("symbol", "").strip()
+    start_date = request.args.get("start_date", "").strip()
+    end_date = request.args.get("end_date", "").strip()
+    print(
+        f"=== route_foreign called symbol={symbol} {start_date}~{end_date} ===",
+        flush=True,
+    )
+    try:
+        if not symbol or not start_date or not end_date:
+            return _json_response({"error": "缺少 symbol、start_date 或 end_date"}, 400)
+        if USE_MOCK:
+            return _json_response({"symbol": symbol, "data": _mock_foreign_data()})
+
+        future = _http_executor.submit(
+            _fetch_foreign_blocking,
+            symbol,
+            start_date,
+            end_date,
+        )
+        data = future.result(timeout=90)
+        return _json_response({"symbol": symbol, "data": data})
+    except Exception as exc:
+        detail = traceback.format_exc()
+        app.logger.error("route_foreign error: %s", detail)
+        return _json_response({"error": str(exc), "data": []}, 500)
+
+
 @app.route("/api/stocks/chart", methods=["GET"])
 def route_chart():
     symbol = request.args.get("symbol", "").strip()
@@ -589,8 +633,22 @@ def route_chart():
         return _json_response({"error": str(exc), "detail": detail}, 500)
 
 
+def _bootstrap_stock_list() -> None:
+    """清單更新可能打外部站，不能擋住 /health，否則 App 會一直顯示無法連線。"""
+    try:
+        with app.app_context():
+            ensure_stock_list_fresh()
+    except Exception:
+        app.logger.exception("背景更新股票清單失敗")
+
+
+threading.Thread(
+    target=_bootstrap_stock_list,
+    name="stock-list-bootstrap",
+    daemon=True,
+).start()
+
 with app.app_context():
-    ensure_stock_list_fresh()
     start_scheduler(app)
 
 

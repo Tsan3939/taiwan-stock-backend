@@ -900,12 +900,6 @@
     "market": "TWSE"
   },
   {
-    "symbol": "1589.TW",
-    "code": "1589",
-    "name": "永冠-KY",
-    "market": "TWSE"
-  },
-  {
     "symbol": "1590.TW",
     "code": "1590",
     "name": "亞德客-KY",
@@ -1106,7 +1100,7 @@
   {
     "symbol": "1721.TW",
     "code": "1721",
-    "name": "三晃",
+    "name": "國慶科技",
     "market": "TWSE"
   },
   {
@@ -1610,7 +1604,7 @@
   {
     "symbol": "2072.TW",
     "code": "2072",
-    "name": "世紀風電",
+    "name": "世紀能源",
     "market": "TWSE"
   },
   {
@@ -1798,6 +1792,12 @@
     "code": "2248",
     "name": "華勝-KY",
     "market": "TWSE"
+  },
+  {
+    "symbol": "2249.TWO",
+    "code": "2249",
+    "name": "湧盛",
+    "market": "TPEx"
   },
   {
     "symbol": "2250.TW",
@@ -3222,12 +3222,6 @@
     "market": "TWSE"
   },
   {
-    "symbol": "2867.TW",
-    "code": "2867",
-    "name": "三商壽",
-    "market": "TWSE"
-  },
-  {
     "symbol": "2880.TW",
     "code": "2880",
     "name": "華南金",
@@ -3405,6 +3399,12 @@
     "symbol": "2937.TWO",
     "code": "2937",
     "name": "集雅社",
+    "market": "TPEx"
+  },
+  {
+    "symbol": "2938.TWO",
+    "code": "2938",
+    "name": "床的世界",
     "market": "TPEx"
   },
   {
@@ -5292,6 +5292,12 @@
     "market": "TWSE"
   },
   {
+    "symbol": "3718.TWO",
+    "code": "3718",
+    "name": "中光電投控",
+    "market": "TPEx"
+  },
+  {
     "symbol": "4102.TWO",
     "code": "4102",
     "name": "永日",
@@ -5403,12 +5409,6 @@
     "symbol": "4129.TWO",
     "code": "4129",
     "name": "聯合",
-    "market": "TPEx"
-  },
-  {
-    "symbol": "4130.TWO",
-    "code": "4130",
-    "name": "健亞",
     "market": "TPEx"
   },
   {
@@ -5804,7 +5804,7 @@
   {
     "symbol": "4530.TWO",
     "code": "4530",
-    "name": "宏易",
+    "name": "天意能創",
     "market": "TPEx"
   },
   {
@@ -6170,7 +6170,7 @@
   {
     "symbol": "4747.TWO",
     "code": "4747",
-    "name": "強生",
+    "name": "強生*",
     "market": "TPEx"
   },
   {
@@ -6440,7 +6440,7 @@
   {
     "symbol": "4953.TWO",
     "code": "4953",
-    "name": "緯軟",
+    "name": "緯致",
     "market": "TPEx"
   },
   {
@@ -6714,10 +6714,10 @@
     "market": "TWSE"
   },
   {
-    "symbol": "5236.TWO",
+    "symbol": "5236.TW",
     "code": "5236",
     "name": "凌陽創新",
-    "market": "TPEx"
+    "market": "TWSE"
   },
   {
     "symbol": "5243.TW",
@@ -6963,12 +6963,6 @@
     "symbol": "5364.TWO",
     "code": "5364",
     "name": "力麗店",
-    "market": "TPEx"
-  },
-  {
-    "symbol": "5371.TWO",
-    "code": "5371",
-    "name": "中光電",
     "market": "TPEx"
   },
   {
@@ -7430,7 +7424,7 @@
   {
     "symbol": "5904.TWO",
     "code": "5904",
-    "name": "寶雅",
+    "name": "寶雅*",
     "market": "TPEx"
   },
   {
@@ -8574,6 +8568,12 @@
     "market": "TPEx"
   },
   {
+    "symbol": "6467.TW",
+    "code": "6467",
+    "name": "泰合",
+    "market": "TWSE"
+  },
+  {
     "symbol": "6469.TWO",
     "code": "6469",
     "name": "大樹",
@@ -8985,6 +8985,12 @@
     "symbol": "6603.TWO",
     "code": "6603",
     "name": "富強鑫",
+    "market": "TPEx"
+  },
+  {
+    "symbol": "6604.TWO",
+    "code": "6604",
+    "name": "儒億",
     "market": "TPEx"
   },
   {
@@ -9582,6 +9588,12 @@
     "market": "TPEx"
   },
   {
+    "symbol": "6825.TWO",
+    "code": "6825",
+    "name": "和暢科技",
+    "market": "TPEx"
+  },
+  {
     "symbol": "6829.TWO",
     "code": "6829",
     "name": "千附精密",
@@ -9774,6 +9786,12 @@
     "market": "TPEx"
   },
   {
+    "symbol": "6898.TWO",
+    "code": "6898",
+    "name": "程曦資訊",
+    "market": "TPEx"
+  },
+  {
     "symbol": "6899.TWO",
     "code": "6899",
     "name": "創為精密",
@@ -9918,6 +9936,12 @@
     "market": "TWSE"
   },
   {
+    "symbol": "6938.TWO",
+    "code": "6938",
+    "name": "藍新資訊",
+    "market": "TPEx"
+  },
+  {
     "symbol": "6944.TW",
     "code": "6944",
     "name": "兆聯實業",
@@ -9928,6 +9952,12 @@
     "code": "6945",
     "name": "圓祥生技",
     "market": "TPEx"
+  },
+  {
+    "symbol": "6947.TW",
+    "code": "6947",
+    "name": "台鎔科技",
+    "market": "TWSE"
   },
   {
     "symbol": "6952.TW",
@@ -10056,6 +10086,12 @@
     "market": "TPEx"
   },
   {
+    "symbol": "7689.TW",
+    "code": "7689",
+    "name": "大鵬科CLMX",
+    "market": "TWSE"
+  },
+  {
     "symbol": "7703.TWO",
     "code": "7703",
     "name": "銳澤",
@@ -10084,6 +10120,12 @@
     "code": "7709",
     "name": "榮田",
     "market": "TPEx"
+  },
+  {
+    "symbol": "7710.TW",
+    "code": "7710",
+    "name": "東擎科技",
+    "market": "TWSE"
   },
   {
     "symbol": "7711.TW",
@@ -10338,6 +10380,12 @@
     "market": "TPEx"
   },
   {
+    "symbol": "7806.TWO",
+    "code": "7806",
+    "name": "精華生醫",
+    "market": "TPEx"
+  },
+  {
     "symbol": "7810.TWO",
     "code": "7810",
     "name": "捷創科技",
@@ -10347,6 +10395,12 @@
     "symbol": "7811.TWO",
     "code": "7811",
     "name": "民盛",
+    "market": "TPEx"
+  },
+  {
+    "symbol": "7814.TWO",
+    "code": "7814",
+    "name": "海昌生技",
     "market": "TPEx"
   },
   {
@@ -10380,6 +10434,12 @@
     "market": "TWSE"
   },
   {
+    "symbol": "7825.TWO",
+    "code": "7825",
+    "name": "和亞智慧",
+    "market": "TPEx"
+  },
+  {
     "symbol": "7828.TWO",
     "code": "7828",
     "name": "創新服務",
@@ -10395,6 +10455,36 @@
     "symbol": "7842.TWO",
     "code": "7842",
     "name": "天能綠電",
+    "market": "TPEx"
+  },
+  {
+    "symbol": "7848.TWO",
+    "code": "7848",
+    "name": "騏億鑫",
+    "market": "TPEx"
+  },
+  {
+    "symbol": "7855.TW",
+    "code": "7855",
+    "name": "和運租車",
+    "market": "TWSE"
+  },
+  {
+    "symbol": "7856.TWO",
+    "code": "7856",
+    "name": "漢測",
+    "market": "TPEx"
+  },
+  {
+    "symbol": "7867.TW",
+    "code": "7867",
+    "name": "特力屋",
+    "market": "TWSE"
+  },
+  {
+    "symbol": "7869.TWO",
+    "code": "7869",
+    "name": "宏于電機",
     "market": "TPEx"
   },
   {
@@ -10812,12 +10902,6 @@
     "market": "TPEx"
   },
   {
-    "symbol": "8183.TWO",
-    "code": "8183",
-    "name": "精星",
-    "market": "TPEx"
-  },
-  {
     "symbol": "8201.TW",
     "code": "8201",
     "name": "無敵",
@@ -11192,7 +11276,7 @@
   {
     "symbol": "8472.TWO",
     "code": "8472",
-    "name": "夠麻吉",
+    "name": "納維康",
     "market": "TPEx"
   },
   {
@@ -11262,10 +11346,10 @@
     "market": "TPEx"
   },
   {
-    "symbol": "8908.TWO",
+    "symbol": "8908.TW",
     "code": "8908",
     "name": "欣雄",
-    "market": "TPEx"
+    "market": "TWSE"
   },
   {
     "symbol": "8916.TWO",
