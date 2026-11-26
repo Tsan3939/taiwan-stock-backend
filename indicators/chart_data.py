@@ -11,6 +11,7 @@ import pandas as pd
 from data_sources import yahoo_source
 from indicators.avg_lot import compute_avg_lot, fetch_trade_counts
 from indicators.chart_cache import chart_cache
+from indicators.macd import compute_macd
 from indicators.rsi import compute_rsi
 from indicators.stochastic import compute_fast_kd
 
@@ -163,6 +164,7 @@ def _compute_indicators(rows: list[dict]) -> list[dict]:
     rsi6 = compute_rsi(closes, 6)
     rsi12 = compute_rsi(closes, 12)
     fk, fd = compute_fast_kd(highs, lows, closes, k_period=5, d_period=2)
+    difs, macds, oscs = compute_macd(closes)
 
     for i, row in enumerate(rows):
         row["ma5"] = ma5[i]
@@ -175,6 +177,9 @@ def _compute_indicators(rows: list[dict]) -> list[dict]:
         row["rsi12"] = rsi12[i]
         row["fk"] = fk[i]
         row["fd"] = fd[i]
+        row["dif"] = difs[i]
+        row["macd"] = macds[i]
+        row["osc"] = oscs[i]
 
     return rows
 
@@ -195,7 +200,7 @@ def compute_chart_data(
     if cached is not None:
         full_rows = _drop_invalid_rows(cached)
         _ensure_trade_counts(full_rows, symbol, fetch_start, end_date)
-        if full_rows and "ma240" not in full_rows[0]:
+        if full_rows and ("ma240" not in full_rows[0] or "osc" not in full_rows[0]):
             full_rows = _compute_indicators(full_rows)
             chart_cache.put(symbol, fetch_start, end_date, full_rows)
     else:
